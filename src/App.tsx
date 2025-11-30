@@ -13,7 +13,7 @@ import './App.css';
 // Conectamos con el servidor Socket.io.
 // Es importante hacer esto FUERA del componente para no crear una nueva conexión
 // cada vez que el componente se renderiza (lo cual pasa mucho en React).
-const socket = io('http://localhost:3001');
+const socket = io('https://free-chat-backend-pi.vercel.app/');
 
 // Generamos un ID de usuario aleatorio para esta sesión.
 // Esto es solo para simular una identidad y saber cuáles mensajes son "míos".
