@@ -10,12 +10,14 @@ import io from 'socket.io-client';
 // Importamos los estilos CSS.
 import './App.css';
 
-// Configuramos la conexión con Socket.io de manera OPTIMIZADA.
+// Configuramos la conexión con Socket.io de manera OPTIMIZADA para Vercel.
 // Es importante hacer esto FUERA del componente para no crear una nueva conexión
 // cada vez que el componente se renderiza (lo cual pasa mucho en React).
+// IMPORTANTE: Vercel NO soporta WebSockets, por eso usamos SOLO 'polling'.
 const socket = io('https://free-chat-backend-pi.vercel.app/', {
-  // Configuración de transportes: intentar WebSocket primero, luego polling como fallback.
-  transports: ['websocket', 'polling'],
+  // CRÍTICO: Solo usar 'polling' porque Vercel no soporta WebSockets.
+  // HTTP long-polling es completamente funcional y suficiente para el chat.
+  transports: ['polling'],
 
   // Configuración de reconexión automática.
   reconnection: true,            // Habilitar reconexión automática
