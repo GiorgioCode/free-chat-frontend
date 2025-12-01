@@ -2,7 +2,8 @@
 // useEffect: Para ejecutar código cuando el componente se monta (iniciar conexión) o actualiza.
 // useState: Para guardar datos que cambian (mensajes, input, estado de verificación).
 // useRef: Para mantener una referencia a un elemento del DOM (usado para el scroll automático).
-import { useEffect, useState, useRef } from 'react';
+// useCallback: Para memorizar funciones y evitar re-renders innecesarios que hacen perder el focus.
+import { useEffect, useState, useRef, useCallback } from 'react';
 
 // Importamos la librería cliente de Socket.io.
 import io from 'socket.io-client';
@@ -179,92 +180,86 @@ function App() {
     }
   };
 
+  // ===== MANEJADORES DE EVENTOS MEMORIZADOS =====
+  // Usamos useCallback para evitar re-renders innecesarios que hacen perder el focus del input.
+
+  const handleConnect = useCallback(() => {
+    console.log('Connected to server');
+    setIsConnected(true);
+  }, []);
+
+  const handleDisconnect = useCallback(() => {
+    console.log('Disconnected from server');
+    setIsConnected(false);
+  }, []);
+
+  const handleReconnectAttempt = useCallback((attempt: number) => {
+    console.log(`Reconnection attempt ${attempt}`);
+  }, []);
+
+  const handleReconnect = useCallback((attemptNumber: number) => {
+    console.log(`Reconnected after ${attemptNumber} attempts`);
+    setIsConnected(true);
+  }, []);
+
+  const handleSyncMessages = useCallback((syncedMessages: Message[]) => {
+    console.log(`Received ${syncedMessages.length} synced messages`);
+
+    const newMessages = syncedMessages.filter(msg => {
+      if (!receivedMessageIds.current.has(msg.id)) {
+        receivedMessageIds.current.add(msg.id);
+        return true;
+      }
+      return false;
+    });
+
+    if (newMessages.length > 0) {
+      setMessages(prev => [...prev, ...newMessages]);
+    }
+  }, []);
+
+  const handleReceiveMessage = useCallback((data: Message) => {
+    if (!receivedMessageIds.current.has(data.id)) {
+      receivedMessageIds.current.add(data.id);
+      setMessages((prev) => [...prev, data]);
+      console.log('New message received:', data.id);
+    } else {
+      console.log('Duplicate message ignored:', data.id);
+    }
+  }, []);
+
+  const handleUserCount = useCallback((count: number) => {
+    setUserCount(count);
+  }, []);
+
   // useEffect principal: Configura los "listeners" (escuchadores) de eventos de Socket.io.
   useEffect(() => {
-    // ===== EVENTOS DE CONEXIÓN =====
+    // Registramos los event handlers.
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('reconnect_attempt', handleReconnectAttempt);
+    socket.on('reconnect', handleReconnect);
+    socket.on('sync_messages', handleSyncMessages);
+    socket.on('receive_message', handleReceiveMessage);
+    socket.on('user_count', handleUserCount);
 
-    // Cuando nos conectamos al servidor.
-    socket.on('connect', () => {
-      console.log('Connected to server');
-      setIsConnected(true);
-    });
-
-    // Cuando nos desconectamos del servidor.
-    socket.on('disconnect', () => {
-      console.log('Disconnected from server');
-      setIsConnected(false);
-    });
-
-    // Intentos de reconexión.
-    socket.on('reconnect_attempt', (attempt) => {
-      console.log(`Reconnection attempt ${attempt}`);
-    });
-
-    // Cuando nos reconectamos exitosamente.
-    socket.on('reconnect', (attemptNumber) => {
-      console.log(`Reconnected after ${attemptNumber} attempts`);
-      setIsConnected(true);
-    });
-
-    // ===== SINCRONIZACIÓN DE MENSAJES =====
-    // Escuchamos cuando el servidor nos envía mensajes históricos al conectarnos.
-    socket.on('sync_messages', (syncedMessages: Message[]) => {
-      console.log(`Received ${syncedMessages.length} synced messages`);
-
-      // Filtramos los mensajes que no hemos recibido antes (deduplicación).
-      const newMessages = syncedMessages.filter(msg => {
-        if (!receivedMessageIds.current.has(msg.id)) {
-          receivedMessageIds.current.add(msg.id);
-          return true;
-        }
-        return false;
-      });
-
-      if (newMessages.length > 0) {
-        // Agregamos los nuevos mensajes al estado.
-        setMessages(prev => [...prev, ...newMessages]);
-      }
-    });
-
-    // ===== RECEPCIÓN DE MENSAJES =====
-    // Escuchamos cuando el servidor nos envía un nuevo mensaje ('receive_message').
-    socket.on('receive_message', (data: Message) => {
-      // Deduplicación: solo procesamos si no lo hemos recibido antes.
-      if (!receivedMessageIds.current.has(data.id)) {
-        receivedMessageIds.current.add(data.id);
-
-        // Actualizamos el estado de mensajes agregando el nuevo al final.
-        setMessages((prev) => [...prev, data]);
-
-        console.log('New message received:', data.id);
-      } else {
-        console.log('Duplicate message ignored:', data.id);
-      }
-    });
-
-    // Escuchamos cuando el servidor nos actualiza el conteo de usuarios.
-    socket.on('user_count', (count: number) => {
-      setUserCount(count);
-    });
-
-    // Función de limpieza (cleanup): Se ejecuta si el componente se desmonta.
+    // Función de limpieza (cleanup).
     return () => {
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('reconnect_attempt');
-      socket.off('reconnect');
-      socket.off('sync_messages');
-      socket.off('receive_message');
-      socket.off('user_count');
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('reconnect_attempt', handleReconnectAttempt);
+      socket.off('reconnect', handleReconnect);
+      socket.off('sync_messages', handleSyncMessages);
+      socket.off('receive_message', handleReceiveMessage);
+      socket.off('user_count', handleUserCount);
 
-      // Limpiamos todos los timeouts pendientes.
       pendingMessages.current.forEach(pending => {
         if (pending.timeout) {
           clearTimeout(pending.timeout);
         }
       });
     };
-  }, []);
+  }, [handleConnect, handleDisconnect, handleReconnectAttempt, handleReconnect, handleSyncMessages, handleReceiveMessage, handleUserCount]);
 
   // useEffect secundario: Se ejecuta cada vez que cambia la lista de 'messages' o 'isVerified'.
   // Su función es hacer scroll automático hacia abajo para ver el último mensaje.
